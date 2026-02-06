@@ -15,15 +15,22 @@ html, body {
 }
 
 #container {
+    position: absolute;
+    bottom: 0;
+    left: 0;
     width: 800px;
     height: 600px;
-    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding: 20px;
+    box-sizing: border-box;
 }
 
 .message {
     color: white;
     font-size: 18px;
-    margin-bottom: 8px;
+    margin-top: 8px;
 }
 
 .name {
@@ -70,7 +77,6 @@ async function pollChat() {
         div.className = "message"
         div.innerHTML = `<span class="name">${m.authorDetails.displayName}</span>: ${m.snippet.displayMessage}`
         container.appendChild(div)
-        container.scrollTop = container.scrollHeight
     })
     setTimeout(pollChat, pollTime)
 }
