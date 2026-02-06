@@ -17,7 +17,6 @@ html, body {
 #container {
     width: 800px;
     height: 600px;
-    display: none;
     overflow-y: auto;
 }
 
@@ -31,11 +30,6 @@ html, body {
     font-weight: bold;
     color: #00ffcc;
 }
-
-.status {
-    color: white;
-    font-size: 20px;
-}
 </style>
 </head>
 <body>
@@ -44,36 +38,15 @@ html, body {
 
 <script>
 let apiKey = "AIzaSyArsE7xFU4H3Yln1z13DXLby2ASWT8TFuo"
+let channelId = "UCIa777ItGO0vXFPcCpkwzng"
+
 let container = document.getElementById("container")
 let chatId = null
 let nextPage = ""
-let pollTime = 3000
 let polling = false
+let pollTime = 3000
 
-function extractChannel(input) {
-    input = input.trim()
-    if (input.startsWith("http")) {
-        let parts = input.split("/")
-        return parts[parts.length - 1]
-    }
-    return input
-}
-
-async function getChannelId(input) {
-    input = extractChannel(input)
-    if (input.startsWith("UC")) return input
-    if (input.startsWith("@")) {
-        let r = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=id&forHandle=${input.slice(1)}&key=${apiKey}`)
-        let j = await r.json()
-        if (j.items && j.items.length) return j.items[0].id
-    }
-    let r = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&type=channel&q=${input}&key=${apiKey}`)
-    let j = await r.json()
-    if (j.items && j.items.length) return j.items[0].snippet.channelId
-    return null
-}
-
-async function getLiveVideo(channelId) {
+async function getLiveVideo() {
     let r = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&eventType=live&type=video&key=${apiKey}`)
     let j = await r.json()
     if (j.items && j.items.length) return j.items[0].id.videoId
@@ -90,12 +63,8 @@ async function pollChat() {
     if (!polling || !chatId) return
     let r = await fetch(`https://www.googleapis.com/youtube/v3/liveChat/messages?liveChatId=${chatId}&part=snippet,authorDetails&pageToken=${nextPage}&key=${apiKey}`)
     let j = await r.json()
-    pollTime = j.pollingIntervalMillis || 3000
+    pollTime = j.pollingIntervalMillis || pollTime
     nextPage = j.nextPageToken || nextPage
-    if (j.items.length) {
-        let status = document.querySelector(".status")
-        if (status) status.remove()
-    }
     j.items.forEach(m => {
         let div = document.createElement("div")
         div.className = "message"
@@ -106,38 +75,16 @@ async function pollChat() {
     setTimeout(pollChat, pollTime)
 }
 
-document.addEventListener("keydown", async e => {
-    if (e.code === "Space") {
-        e.preventDefault()
-        polling = false
-        container.innerHTML = ""
-        container.style.display = "block"
-        let input = prompt("Enter channel (@handle, URL, or channel ID)")
-        if (!input) return
-        let channelId = await getChannelId(input)
-        if (!channelId) {
-            container.textContent = "Channel not found"
-            return
-        }
-        let videoId = await getLiveVideo(channelId)
-        if (!videoId) {
-            container.textContent = "No active livestream"
-            return
-        }
-        chatId = await getChatId(videoId)
-        if (!chatId) {
-            container.textContent = "Live chat unavailable"
-            return
-        }
-        let status = document.createElement("div")
-        status.className = "status"
-        status.textContent = "Waiting for chat messages..."
-        container.appendChild(status)
-        nextPage = ""
-        polling = true
-        pollChat()
-    }
-})
+async function start() {
+    let videoId = await getLiveVideo()
+    if (!videoId) return
+    chatId = await getChatId(videoId)
+    if (!chatId) return
+    polling = true
+    pollChat()
+}
+
+start()
 </script>
 
 </body>
