@@ -31,6 +31,11 @@ html, body {
     font-weight: bold;
     color: #00ffcc;
 }
+
+.status {
+    color: white;
+    font-size: 20px;
+}
 </style>
 </head>
 <body>
@@ -38,11 +43,12 @@ html, body {
 <div id="container"></div>
 
 <script>
-let apiKey = "zxr3-a2tc-ta9f-zxma-4ptb"
+let apiKey = "AIzaSyArsE7xFU4H3Yln1z13DXLby2ASWT8TFuo"
 let container = document.getElementById("container")
 let chatId = null
 let nextPage = ""
-let interval = null
+let pollTime = 3000
+let polling = false
 
 function extractChannel(input) {
     input = input.trim()
@@ -68,19 +74,9 @@ async function getChannelId(input) {
 }
 
 async function getLiveVideo(channelId) {
-    let r = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=contentDetails&id=${channelId}&key=${apiKey}`)
+    let r = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&eventType=live&type=video&key=${apiKey}`)
     let j = await r.json()
-    let uploads = j.items[0].contentDetails.relatedPlaylists.uploads
-    let vr = await fetch(`https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=${uploads}&maxResults=5&key=${apiKey}`)
-    let vj = await vr.json()
-    for (let item of vj.items) {
-        let vid = item.snippet.resourceId.videoId
-        let dr = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=liveStreamingDetails&id=${vid}&key=${apiKey}`)
-        let dj = await dr.json()
-        if (dj.items[0].liveStreamingDetails && dj.items[0].liveStreamingDetails.activeLiveChatId) {
-            return vid
-        }
-    }
+    if (j.items && j.items.length) return j.items[0].id.videoId
     return null
 }
 
@@ -90,11 +86,16 @@ async function getChatId(videoId) {
     return j.items[0].liveStreamingDetails.activeLiveChatId || null
 }
 
-async function loadMessages() {
-    if (!chatId) return
+async function pollChat() {
+    if (!polling || !chatId) return
     let r = await fetch(`https://www.googleapis.com/youtube/v3/liveChat/messages?liveChatId=${chatId}&part=snippet,authorDetails&pageToken=${nextPage}&key=${apiKey}`)
     let j = await r.json()
-    nextPage = j.nextPageToken || ""
+    pollTime = j.pollingIntervalMillis || 3000
+    nextPage = j.nextPageToken || nextPage
+    if (j.items.length) {
+        let status = document.querySelector(".status")
+        if (status) status.remove()
+    }
     j.items.forEach(m => {
         let div = document.createElement("div")
         div.className = "message"
@@ -102,12 +103,13 @@ async function loadMessages() {
         container.appendChild(div)
         container.scrollTop = container.scrollHeight
     })
+    setTimeout(pollChat, pollTime)
 }
 
 document.addEventListener("keydown", async e => {
     if (e.code === "Space") {
         e.preventDefault()
-        if (interval) clearInterval(interval)
+        polling = false
         container.innerHTML = ""
         container.style.display = "block"
         let input = prompt("Enter channel (@handle, URL, or channel ID)")
@@ -127,8 +129,13 @@ document.addEventListener("keydown", async e => {
             container.textContent = "Live chat unavailable"
             return
         }
-        loadMessages()
-        interval = setInterval(loadMessages, 3000)
+        let status = document.createElement("div")
+        status.className = "status"
+        status.textContent = "Waiting for chat messages..."
+        container.appendChild(status)
+        nextPage = ""
+        polling = true
+        pollChat()
     }
 })
 </script>
