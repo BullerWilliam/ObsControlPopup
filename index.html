@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>YouTube Chat Preview</title>
+<title>YouTube Live Chat Overlay</title>
 <style>
 html, body {
     margin: 0;
@@ -17,51 +17,91 @@ html, body {
 #container {
     width: 800px;
     height: 600px;
-    background: rgba(0, 0, 0, 0.4);
     display: none;
-    box-sizing: border-box;
     padding: 20px;
-}
-
-.chat {
-    color: white;
-    font-size: 18px;
-    line-height: 1.4;
-}
-
-.username {
-    font-weight: bold;
-    color: #00ffcc;
+    box-sizing: border-box;
 }
 
 .message {
-    margin-top: 10px;
+    color: white;
+    font-size: 18px;
+    margin-bottom: 8px;
+}
+
+.name {
+    font-weight: bold;
+    color: #00ffcc;
 }
 </style>
 </head>
 <body>
 
-<div id="container">
-    <div class="chat">
-        <div><span class="username" id="name"></span>:</div>
-        <div class="message">Hello everyone 👋</div>
-        <div class="message">This is a chat preview</div>
-        <div class="message">Looks just like live chat</div>
-    </div>
-</div>
+<div id="container"></div>
 
 <script>
+let apiKey = "YOUR_API_KEY_HERE"
 let container = document.getElementById("container")
-let nameEl = document.getElementById("name")
+let chatId = null
+let nextPage = ""
 
-document.addEventListener("keydown", function(e) {
+async function getChannelId(username) {
+    let r = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&type=channel&q=${username}&key=${apiKey}`)
+    let j = await r.json()
+    if (!j.items || !j.items.length) return null
+    return j.items[0].snippet.channelId
+}
+
+async function getLiveVideo(channelId) {
+    let r = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&eventType=live&type=video&key=${apiKey}`)
+    let j = await r.json()
+    if (!j.items || !j.items.length) return null
+    return j.items[0].id.videoId
+}
+
+async function getChatId(videoId) {
+    let r = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=liveStreamingDetails&id=${videoId}&key=${apiKey}`)
+    let j = await r.json()
+    return j.items[0].liveStreamingDetails.activeLiveChatId || null
+}
+
+async function loadMessages() {
+    if (!chatId) return
+    let r = await fetch(`https://www.googleapis.com/youtube/v3/liveChat/messages?liveChatId=${chatId}&part=snippet,authorDetails&pageToken=${nextPage}&key=${apiKey}`)
+    let j = await r.json()
+    nextPage = j.nextPageToken || ""
+    j.items.forEach(m => {
+        let div = document.createElement("div")
+        div.className = "message"
+        div.innerHTML = `<span class="name">${m.authorDetails.displayName}</span>: ${m.snippet.displayMessage}`
+        container.appendChild(div)
+        container.scrollTop = container.scrollHeight
+    })
+}
+
+document.addEventListener("keydown", async e => {
     if (e.code === "Space") {
         e.preventDefault()
-        let username = prompt("Enter YouTube username")
-        if (username && username.trim() !== "") {
-            nameEl.textContent = username
-            container.style.display = "block"
+        let username = prompt("Enter YouTube channel username")
+        if (!username) return
+        container.innerHTML = ""
+        container.style.display = "block"
+        let channelId = await getChannelId(username)
+        if (!channelId) {
+            container.textContent = "Channel not found"
+            return
         }
+        let videoId = await getLiveVideo(channelId)
+        if (!videoId) {
+            container.textContent = "No active livestream"
+            return
+        }
+        chatId = await getChatId(videoId)
+        if (!chatId) {
+            container.textContent = "Live chat unavailable"
+            return
+        }
+        loadMessages()
+        setInterval(loadMessages, 3000)
     }
 })
 </script>
