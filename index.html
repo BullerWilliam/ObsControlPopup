@@ -68,10 +68,20 @@ async function getChannelId(input) {
 }
 
 async function getLiveVideo(channelId) {
-    let r = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&eventType=live&type=video&key=${apiKey}`)
+    let r = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=contentDetails&id=${channelId}&key=${apiKey}`)
     let j = await r.json()
-    if (!j.items || !j.items.length) return null
-    return j.items[0].id.videoId
+    let uploads = j.items[0].contentDetails.relatedPlaylists.uploads
+    let vr = await fetch(`https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=${uploads}&maxResults=5&key=${apiKey}`)
+    let vj = await vr.json()
+    for (let item of vj.items) {
+        let vid = item.snippet.resourceId.videoId
+        let dr = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=liveStreamingDetails&id=${vid}&key=${apiKey}`)
+        let dj = await dr.json()
+        if (dj.items[0].liveStreamingDetails && dj.items[0].liveStreamingDetails.activeLiveChatId) {
+            return vid
+        }
+    }
+    return null
 }
 
 async function getChatId(videoId) {
